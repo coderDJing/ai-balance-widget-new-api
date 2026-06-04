@@ -298,6 +298,7 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             install_dev_shutdown_handler(app.handle().clone());
@@ -357,13 +358,13 @@ fn spawn_auto_update_check(app: AppHandle) {
 
 fn spawn_manual_update_check(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        emit_settings_hint(&app, "正在检查更新...");
+        show_notification(&app, "AI Balance Widget", "正在检查更新...");
 
         let updater = match app.updater() {
             Ok(updater) => updater,
             Err(error) => {
                 eprintln!("updater initialization failed: {error}");
-                emit_settings_hint(&app, "检查更新失败");
+                show_notification(&app, "AI Balance Widget", "检查更新失败");
                 return;
             }
         };
@@ -371,27 +372,31 @@ fn spawn_manual_update_check(app: AppHandle) {
         match updater.check().await {
             Ok(Some(update)) => {
                 let version = update.version.clone();
-                emit_settings_hint(&app, &format!("发现新版本: {version}，正在安装"));
+                show_notification(&app, "AI Balance Widget", &format!("发现新版本: {version}，正在安装"));
                 match update.download_and_install(|_, _| {}, || {}).await {
                     Ok(()) => app.restart(),
                     Err(error) => {
                         eprintln!("update installation failed: {error}");
-                        emit_settings_hint(&app, "更新安装失败");
+                        show_notification(&app, "AI Balance Widget", "更新安装失败");
                     }
                 }
             }
-            Ok(None) => emit_settings_hint(&app, "已是最新版本"),
+            Ok(None) => show_notification(&app, "AI Balance Widget", "已是最新版本"),
             Err(error) => {
                 eprintln!("update check failed: {error}");
-                emit_settings_hint(&app, "检查更新失败");
+                show_notification(&app, "AI Balance Widget", "检查更新失败");
             }
         }
     });
 }
 
-fn emit_settings_hint(app: &AppHandle, message: &str) {
-    let _ = show_settings(app);
-    let _ = app.emit_to("settings", "setup-required", message);
+fn show_notification(app: &AppHandle, title: &str, body: &str) {
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show();
 }
 
 fn configure_webview2_shutdown_flags() {
