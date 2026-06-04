@@ -102,6 +102,15 @@ Git tag 必须使用 `v` 前缀，例如版本 `0.1.1` 对应 tag `v0.1.1`。
 - `updaterJsonPreferNsis: true`
 - `args: --ci`
 
+**重要：** 发布后必须用 `gh` 命令监控构建状态，确保发布成功：
+
+```bash
+gh run list --workflow=release.yml --limit=1    # 查看最新运行
+gh run watch <run-id>                            # 实时监控进度
+gh run view <run-id>                             # 查看最终状态
+gh release view v0.1.2                           # 确认 release 产物
+```
+
 release workflow 必须配置以下 GitHub repository secrets 才能生成 signed updater 产物：
 
 - `TAURI_SIGNING_PRIVATE_KEY`
