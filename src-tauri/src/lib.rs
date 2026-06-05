@@ -217,10 +217,10 @@ async fn query_balance(app: AppHandle) -> Result<BalanceSnapshot, String> {
     let response = client
         .get(&url)
         .header("Authorization", format!("Bearer {}", config.access_token))
-        .header("New-Api-User", config.user_id)
+        .header("New-Api-User", &config.user_id)
         .send()
         .await
-        .map_err(|err| format!("请求失败: {err}"))?;
+        .map_err(|err| format!("请求失败 [{url}]: {err}"))?;
 
     let status = response.status();
     let body = response
@@ -229,11 +229,14 @@ async fn query_balance(app: AppHandle) -> Result<BalanceSnapshot, String> {
         .map_err(|err| format!("读取响应失败: {err}"))?;
 
     if !status.is_success() {
-        return Err(format!("接口返回 HTTP {status}: {}", preview(&body)));
+        return Err(format!(
+            "HTTP {status} [{url}]\n{}",
+            preview(&body)
+        ));
     }
 
     let parsed: NewApiSelfResponse =
-        serde_json::from_str(&body).map_err(|err| format!("响应不是有效 JSON: {err}"))?;
+        serde_json::from_str(&body).map_err(|err| format!("JSON 解析失败: {err}\n{}", preview(&body)))?;
 
     if !parsed.success {
         return Err(parsed

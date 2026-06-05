@@ -362,6 +362,12 @@ button {
   line-height: 28px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.error-line:hover {
+  color: #ffd5c7;
 }
 
 .topbar {

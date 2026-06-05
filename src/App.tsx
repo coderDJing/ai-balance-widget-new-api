@@ -286,6 +286,7 @@ function BalanceWindow() {
   const [activeFlips, setActiveFlips] = useState<Record<number, ActiveFlip>>({});
   const [queryStatus, setQueryStatus] = useState<"loading" | "error" | "ready">("loading");
   const [errorMsg, setErrorMsg] = useState("");
+  const [copied, setCopied] = useState(false);
   const displayTextRef = useRef(formatBalance(null));
   const flipTimersRef = useRef<number[]>([]);
   const flipVersionRef = useRef(0);
@@ -438,7 +439,8 @@ function BalanceWindow() {
       } catch (err) {
         if (mounted) {
           setQueryStatus("error");
-          setErrorMsg(err instanceof Error ? err.message : "接口连接失败");
+          const msg = err instanceof Error ? err.message : String(err || "未知错误");
+          setErrorMsg(msg);
         }
       }
     }
@@ -570,7 +572,18 @@ function BalanceWindow() {
           )}
         </div>
         {queryStatus === "error" && errorMsg && (
-          <div className="error-line">{errorMsg}</div>
+          <div
+            className="error-line"
+            title="点击复制"
+            onClick={() => {
+              navigator.clipboard.writeText(errorMsg).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }).catch(() => undefined);
+            }}
+          >
+            {copied ? "✓ 已复制" : errorMsg}
+          </div>
         )}
       </div>
     </main>
