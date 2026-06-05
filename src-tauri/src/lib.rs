@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
+    fmt::Display,
     fs,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -7,16 +8,20 @@ use std::{
     time::Duration,
 };
 use tauri::{
-    LogicalPosition, LogicalSize,
     menu::{Menu, MenuBuilder},
     tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
-    App, AppHandle, Emitter, Manager, Runtime, WebviewWindow, WindowEvent,
+    App, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, WebviewWindow,
+    WindowEvent,
 };
+#[cfg(not(debug_assertions))]
 use tauri_plugin_autostart::ManagerExt;
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
 const QUOTA_SCALE: f64 = 500_000.0;
 const CONFIG_FILE: &str = "config.json";
+const NOTIFICATION_TITLE: &str = "AI Balance Widget";
+const PROJECT_URL: &str = "https://github.com/coderDJing/ai-balance-widget-new-api";
 const MAIN_WINDOW_DEFAULT_WIDTH: f64 = 280.0;
 const MAIN_WINDOW_MIN_WIDTH: f64 = 220.0;
 const MAIN_WINDOW_MAX_WIDTH: f64 = 520.0;
@@ -32,6 +37,296 @@ fn default_refresh_interval() -> u64 {
 
 fn default_autostart() -> bool {
     true
+}
+
+#[derive(Clone, Copy)]
+enum NativeText {
+    Zh,
+    En,
+}
+
+impl NativeText {
+    fn current() -> Self {
+        if system_locale_name()
+            .as_deref()
+            .is_some_and(is_simplified_chinese_locale_name)
+        {
+            Self::Zh
+        } else {
+            Self::En
+        }
+    }
+
+    fn settings(self) -> &'static str {
+        match self {
+            Self::Zh => "设置",
+            Self::En => "Settings",
+        }
+    }
+
+    fn check_update(self) -> &'static str {
+        match self {
+            Self::Zh => "检查更新",
+            Self::En => "Check for updates",
+        }
+    }
+
+    fn project_site(self) -> &'static str {
+        match self {
+            Self::Zh => "项目地址",
+            Self::En => "Project site",
+        }
+    }
+
+    fn quit(self) -> &'static str {
+        match self {
+            Self::Zh => "退出",
+            Self::En => "Quit",
+        }
+    }
+
+    fn checking_update(self) -> &'static str {
+        match self {
+            Self::Zh => "正在检查更新...",
+            Self::En => "Checking for updates...",
+        }
+    }
+
+    fn update_check_failed(self) -> &'static str {
+        match self {
+            Self::Zh => "检查更新失败",
+            Self::En => "Update check failed",
+        }
+    }
+
+    fn update_install_failed(self) -> &'static str {
+        match self {
+            Self::Zh => "更新安装失败",
+            Self::En => "Update installation failed",
+        }
+    }
+
+    fn up_to_date(self) -> &'static str {
+        match self {
+            Self::Zh => "已是最新版本",
+            Self::En => "Already up to date",
+        }
+    }
+
+    fn update_found(self, version: &str) -> String {
+        match self {
+            Self::Zh => format!("发现新版本: {version}，正在安装"),
+            Self::En => format!("Found version {version}; installing"),
+        }
+    }
+
+    fn setup_required(self) -> &'static str {
+        match self {
+            Self::Zh => "请先完成配置才能显示余额悬浮球",
+            Self::En => "Finish setup before showing the balance widget",
+        }
+    }
+
+    fn endpoint_empty(self) -> &'static str {
+        match self {
+            Self::Zh => "接口地址不能为空",
+            Self::En => "Endpoint URL is required",
+        }
+    }
+
+    fn endpoint_https_required(self) -> &'static str {
+        match self {
+            Self::Zh => "接口地址必须使用 HTTPS",
+            Self::En => "Endpoint URL must use HTTPS",
+        }
+    }
+
+    fn user_id_empty(self) -> &'static str {
+        match self {
+            Self::Zh => "userId 不能为空",
+            Self::En => "User ID is required",
+        }
+    }
+
+    fn access_token_empty(self) -> &'static str {
+        match self {
+            Self::Zh => "Access Token 不能为空",
+            Self::En => "Access Token is required",
+        }
+    }
+
+    fn query_failed(self) -> &'static str {
+        match self {
+            Self::Zh => "查询失败",
+            Self::En => "Query failed",
+        }
+    }
+
+    fn response_missing_data(self) -> &'static str {
+        match self {
+            Self::Zh => "响应缺少 data",
+            Self::En => "Response is missing data",
+        }
+    }
+
+    fn main_window_missing(self) -> &'static str {
+        match self {
+            Self::Zh => "主窗口不存在",
+            Self::En => "Main window does not exist",
+        }
+    }
+
+    fn validation_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("验证失败: {err}"),
+            Self::En => format!("Validation failed: {err}"),
+        }
+    }
+
+    fn http_client_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("创建 HTTP 客户端失败: {err}"),
+            Self::En => format!("Failed to create HTTP client: {err}"),
+        }
+    }
+
+    fn request_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("请求失败: {err}"),
+            Self::En => format!("Request failed: {err}"),
+        }
+    }
+
+    fn request_failed_with_url(self, url: &str, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("请求失败 [{url}]: {err}"),
+            Self::En => format!("Request failed [{url}]: {err}"),
+        }
+    }
+
+    fn read_response_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("读取响应失败: {err}"),
+            Self::En => format!("Failed to read response: {err}"),
+        }
+    }
+
+    fn http_status_body(self, status: impl Display, body: &str) -> String {
+        match self {
+            Self::Zh => format!("接口返回 HTTP {status}: {}", preview(body)),
+            Self::En => format!("Endpoint returned HTTP {status}: {}", preview(body)),
+        }
+    }
+
+    fn http_status_url_body(self, status: impl Display, url: &str, body: &str) -> String {
+        match self {
+            Self::Zh => format!("HTTP {status} [{url}]\n{}", preview(body)),
+            Self::En => format!("HTTP {status} [{url}]\n{}", preview(body)),
+        }
+    }
+
+    fn json_parse_failed(self, err: impl Display, body: &str) -> String {
+        match self {
+            Self::Zh => format!("JSON 解析失败: {err}\n{}", preview(body)),
+            Self::En => format!("Failed to parse JSON: {err}\n{}", preview(body)),
+        }
+    }
+
+    fn invalid_json(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("响应不是有效 JSON: {err}"),
+            Self::En => format!("Response is not valid JSON: {err}"),
+        }
+    }
+
+    fn config_dir_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("读取配置目录失败: {err}"),
+            Self::En => format!("Failed to read config directory: {err}"),
+        }
+    }
+
+    fn create_config_dir_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("创建配置目录失败: {err}"),
+            Self::En => format!("Failed to create config directory: {err}"),
+        }
+    }
+
+    fn read_config_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("读取配置失败: {err}"),
+            Self::En => format!("Failed to read config: {err}"),
+        }
+    }
+
+    fn parse_config_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("解析配置失败: {err}"),
+            Self::En => format!("Failed to parse config: {err}"),
+        }
+    }
+
+    fn serialize_config_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("序列化配置失败: {err}"),
+            Self::En => format!("Failed to serialize config: {err}"),
+        }
+    }
+
+    fn write_config_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("写入配置失败: {err}"),
+            Self::En => format!("Failed to write config: {err}"),
+        }
+    }
+
+    fn dev_shutdown_handler_failed(self, err: impl Display) -> String {
+        match self {
+            Self::Zh => format!("安装开发退出处理失败: {err}"),
+            Self::En => format!("Failed to install development shutdown handler: {err}"),
+        }
+    }
+}
+
+#[cfg(windows)]
+fn system_locale_name() -> Option<String> {
+    use windows_sys::Win32::Globalization::GetUserDefaultLocaleName;
+
+    const LOCALE_NAME_MAX_LENGTH: usize = 85;
+    let mut locale_name = [0u16; LOCALE_NAME_MAX_LENGTH];
+    let len =
+        unsafe { GetUserDefaultLocaleName(locale_name.as_mut_ptr(), locale_name.len() as i32) };
+
+    if len <= 1 {
+        return None;
+    }
+
+    Some(String::from_utf16_lossy(
+        &locale_name[..(len as usize).saturating_sub(1)],
+    ))
+}
+
+#[cfg(not(windows))]
+fn system_locale_name() -> Option<String> {
+    std::env::var("LC_ALL")
+        .or_else(|_| std::env::var("LANG"))
+        .ok()
+}
+
+fn is_simplified_chinese_locale_name(locale_name: &str) -> bool {
+    let normalized = locale_name
+        .split('.')
+        .next()
+        .unwrap_or(locale_name)
+        .replace('_', "-")
+        .to_ascii_lowercase();
+
+    normalized == "zh-cn"
+        || normalized == "zh-sg"
+        || normalized == "zh-my"
+        || normalized == "zh-hans"
+        || normalized.starts_with("zh-hans-")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -96,27 +391,32 @@ async fn save_config(
     #[allow(non_snake_case)] refreshIntervalSecs: Option<u64>,
     #[allow(non_snake_case)] autostartEnabled: Option<bool>,
 ) -> Result<ClientConfig, String> {
+    let text = NativeText::current();
     let endpoint_url = endpointUrl.trim().trim_end_matches('/').to_string();
     if endpoint_url.is_empty() {
-        return Err("接口地址不能为空".to_string());
+        return Err(text.endpoint_empty().to_string());
     }
 
     // 自动补全协议
-    let endpoint_url = if endpoint_url.starts_with("http://") || endpoint_url.starts_with("https://") {
-        endpoint_url
-    } else if endpoint_url.starts_with("localhost") || endpoint_url.starts_with("127.0.0.1") {
-        format!("http://{endpoint_url}")
-    } else {
-        format!("https://{endpoint_url}")
-    };
+    let endpoint_url =
+        if endpoint_url.starts_with("http://") || endpoint_url.starts_with("https://") {
+            endpoint_url
+        } else if endpoint_url.starts_with("localhost") || endpoint_url.starts_with("127.0.0.1") {
+            format!("http://{endpoint_url}")
+        } else {
+            format!("https://{endpoint_url}")
+        };
 
-    if !endpoint_url.starts_with("https://") && !endpoint_url.starts_with("http://localhost") && !endpoint_url.starts_with("http://127.0.0.1") {
-        return Err("接口地址必须使用 HTTPS".to_string());
+    if !endpoint_url.starts_with("https://")
+        && !endpoint_url.starts_with("http://localhost")
+        && !endpoint_url.starts_with("http://127.0.0.1")
+    {
+        return Err(text.endpoint_https_required().to_string());
     }
 
     let user_id = userId.trim().to_string();
     if user_id.is_empty() {
-        return Err("userId 不能为空".to_string());
+        return Err(text.user_id_empty().to_string());
     }
 
     let existing = read_config(&app).ok();
@@ -132,7 +432,7 @@ async fn save_config(
         });
 
     if access_token.is_empty() {
-        return Err("Access Token 不能为空".to_string());
+        return Err(text.access_token_empty().to_string());
     }
 
     let refresh_interval_secs = refreshIntervalSecs
@@ -144,13 +444,12 @@ async fn save_config(
         })
         .clamp(10, 3600);
 
-    let autostart_enabled = autostartEnabled
-        .unwrap_or_else(|| {
-            existing
-                .as_ref()
-                .map(|c| c.autostart_enabled)
-                .unwrap_or(true)
-        });
+    let autostart_enabled = autostartEnabled.unwrap_or_else(|| {
+        existing
+            .as_ref()
+            .map(|c| c.autostart_enabled)
+            .unwrap_or(true)
+    });
 
     let config = StoredConfig {
         endpoint_url,
@@ -176,13 +475,14 @@ async fn save_config(
             if let Some(old_config) = existing {
                 let _ = write_config(&app, &old_config);
             }
-            Err(format!("验证失败: {err}"))
+            Err(text.validation_failed(err))
         }
     }
 }
 
 #[tauri::command]
 async fn query_balance(app: AppHandle) -> Result<BalanceSnapshot, String> {
+    let text = NativeText::current();
     let config = match read_config(&app) {
         Ok(config)
             if !config.endpoint_url.is_empty()
@@ -207,7 +507,7 @@ async fn query_balance(app: AppHandle) -> Result<BalanceSnapshot, String> {
         .timeout(Duration::from_secs(15))
         .user_agent("ai-balance-widget-new-api/0.1")
         .build()
-        .map_err(|err| format!("创建 HTTP 客户端失败: {err}"))?;
+        .map_err(|err| text.http_client_failed(err))?;
 
     let url = format!(
         "{}/api/user/self",
@@ -220,32 +520,31 @@ async fn query_balance(app: AppHandle) -> Result<BalanceSnapshot, String> {
         .header("New-Api-User", &config.user_id)
         .send()
         .await
-        .map_err(|err| format!("请求失败 [{url}]: {err}"))?;
+        .map_err(|err| text.request_failed_with_url(&url, err))?;
 
     let status = response.status();
     let body = response
         .text()
         .await
-        .map_err(|err| format!("读取响应失败: {err}"))?;
+        .map_err(|err| text.read_response_failed(err))?;
 
     if !status.is_success() {
-        return Err(format!(
-            "HTTP {status} [{url}]\n{}",
-            preview(&body)
-        ));
+        return Err(text.http_status_url_body(status, &url, &body));
     }
 
     let parsed: NewApiSelfResponse =
-        serde_json::from_str(&body).map_err(|err| format!("JSON 解析失败: {err}\n{}", preview(&body)))?;
+        serde_json::from_str(&body).map_err(|err| text.json_parse_failed(err, &body))?;
 
     if !parsed.success {
         return Err(parsed
             .message
             .filter(|message| !message.trim().is_empty())
-            .unwrap_or_else(|| "查询失败".to_string()));
+            .unwrap_or_else(|| text.query_failed().to_string()));
     }
 
-    let data = parsed.data.ok_or_else(|| "响应缺少 data".to_string())?;
+    let data = parsed
+        .data
+        .ok_or_else(|| text.response_missing_data().to_string())?;
     Ok(BalanceSnapshot {
         configured: true,
         remaining: Some(data.quota / QUOTA_SCALE),
@@ -268,9 +567,10 @@ fn show_settings_window(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn resize_main_window(app: AppHandle, width: f64) -> Result<(), String> {
+    let text = NativeText::current();
     let window = app
         .get_webview_window("main")
-        .ok_or_else(|| "主窗口不存在".to_string())?;
+        .ok_or_else(|| text.main_window_missing().to_string())?;
     let width = width.clamp(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MAX_WIDTH);
 
     window
@@ -296,10 +596,11 @@ pub fn run() {
     configure_webview2_shutdown_flags();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ))
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .app_name("ai-balance-widget-new-api")
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -364,13 +665,14 @@ fn spawn_auto_update_check(app: AppHandle) {
 
 fn spawn_manual_update_check(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        show_notification(&app, "AI Balance Widget", "正在检查更新...");
+        let text = NativeText::current();
+        show_notification(&app, NOTIFICATION_TITLE, text.checking_update());
 
         let updater = match app.updater() {
             Ok(updater) => updater,
             Err(error) => {
                 eprintln!("updater initialization failed: {error}");
-                show_notification(&app, "AI Balance Widget", "检查更新失败");
+                show_notification(&app, NOTIFICATION_TITLE, text.update_check_failed());
                 return;
             }
         };
@@ -378,19 +680,19 @@ fn spawn_manual_update_check(app: AppHandle) {
         match updater.check().await {
             Ok(Some(update)) => {
                 let version = update.version.clone();
-                show_notification(&app, "AI Balance Widget", &format!("发现新版本: {version}，正在安装"));
+                show_notification(&app, NOTIFICATION_TITLE, &text.update_found(&version));
                 match update.download_and_install(|_, _| {}, || {}).await {
                     Ok(()) => app.restart(),
                     Err(error) => {
                         eprintln!("update installation failed: {error}");
-                        show_notification(&app, "AI Balance Widget", "更新安装失败");
+                        show_notification(&app, NOTIFICATION_TITLE, text.update_install_failed());
                     }
                 }
             }
-            Ok(None) => show_notification(&app, "AI Balance Widget", "已是最新版本"),
+            Ok(None) => show_notification(&app, NOTIFICATION_TITLE, text.up_to_date()),
             Err(error) => {
                 eprintln!("update check failed: {error}");
-                show_notification(&app, "AI Balance Widget", "检查更新失败");
+                show_notification(&app, NOTIFICATION_TITLE, text.update_check_failed());
             }
         }
     });
@@ -398,11 +700,7 @@ fn spawn_manual_update_check(app: AppHandle) {
 
 fn show_notification(app: &AppHandle, title: &str, body: &str) {
     use tauri_plugin_notification::NotificationExt;
-    let _ = app.notification()
-        .builder()
-        .title(title)
-        .body(body)
-        .show();
+    let _ = app.notification().builder().title(title).body(body).show();
 }
 
 fn configure_webview2_shutdown_flags() {
@@ -450,7 +748,7 @@ fn install_dev_shutdown_handler(app: AppHandle) {
         if let Err(err) = ctrlc::set_handler(move || {
             app.exit(0);
         }) {
-            eprintln!("安装开发退出处理失败: {err}");
+            eprintln!("{}", NativeText::current().dev_shutdown_handler_failed(err));
         }
     }
 
@@ -461,33 +759,37 @@ fn install_dev_shutdown_handler(app: AppHandle) {
 }
 
 fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let text = NativeText::current();
     let dir = app
         .path()
         .app_config_dir()
-        .map_err(|err| format!("读取配置目录失败: {err}"))?;
-    fs::create_dir_all(&dir).map_err(|err| format!("创建配置目录失败: {err}"))?;
+        .map_err(|err| text.config_dir_failed(err))?;
+    fs::create_dir_all(&dir).map_err(|err| text.create_config_dir_failed(err))?;
     Ok(dir.join(CONFIG_FILE))
 }
 
 fn read_config(app: &AppHandle) -> Result<StoredConfig, String> {
+    let text = NativeText::current();
     let path = config_path(app)?;
-    let text = fs::read_to_string(&path).map_err(|err| format!("读取配置失败: {err}"))?;
-    serde_json::from_str(&text).map_err(|err| format!("解析配置失败: {err}"))
+    let config_text = fs::read_to_string(&path).map_err(|err| text.read_config_failed(err))?;
+    serde_json::from_str(&config_text).map_err(|err| text.parse_config_failed(err))
 }
 
 fn write_config(app: &AppHandle, config: &StoredConfig) -> Result<(), String> {
+    let text = NativeText::current();
     let path = config_path(app)?;
-    let text =
-        serde_json::to_string_pretty(config).map_err(|err| format!("序列化配置失败: {err}"))?;
-    fs::write(path, text).map_err(|err| format!("写入配置失败: {err}"))
+    let config_text =
+        serde_json::to_string_pretty(config).map_err(|err| text.serialize_config_failed(err))?;
+    fs::write(path, config_text).map_err(|err| text.write_config_failed(err))
 }
 
 async fn verify_config(config: &StoredConfig) -> Result<(), String> {
+    let text = NativeText::current();
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .user_agent("ai-balance-widget-new-api/0.1")
         .build()
-        .map_err(|err| format!("创建 HTTP 客户端失败: {err}"))?;
+        .map_err(|err| text.http_client_failed(err))?;
 
     let url = format!(
         "{}/api/user/self",
@@ -500,26 +802,26 @@ async fn verify_config(config: &StoredConfig) -> Result<(), String> {
         .header("New-Api-User", &config.user_id)
         .send()
         .await
-        .map_err(|err| format!("请求失败: {err}"))?;
+        .map_err(|err| text.request_failed(err))?;
 
     let status = response.status();
     let body = response
         .text()
         .await
-        .map_err(|err| format!("读取响应失败: {err}"))?;
+        .map_err(|err| text.read_response_failed(err))?;
 
     if !status.is_success() {
-        return Err(format!("接口返回 HTTP {status}: {}", preview(&body)));
+        return Err(text.http_status_body(status, &body));
     }
 
     let parsed: NewApiSelfResponse =
-        serde_json::from_str(&body).map_err(|err| format!("响应不是有效 JSON: {err}"))?;
+        serde_json::from_str(&body).map_err(|err| text.invalid_json(err))?;
 
     if !parsed.success {
         return Err(parsed
             .message
             .filter(|message| !message.trim().is_empty())
-            .unwrap_or_else(|| "查询失败".to_string()));
+            .unwrap_or_else(|| text.query_failed().to_string()));
     }
 
     Ok(())
@@ -553,14 +855,22 @@ fn client_config(config: Option<StoredConfig>) -> ClientConfig {
 }
 
 fn sync_autostart(app: &AppHandle) {
-    let manager = app.autolaunch();
-    let enabled = read_config(app)
-        .map(|c| c.autostart_enabled)
-        .unwrap_or(true);
-    if enabled {
-        let _ = manager.enable();
-    } else {
-        let _ = manager.disable();
+    #[cfg(debug_assertions)]
+    {
+        let _ = app;
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        let manager = app.autolaunch();
+        let enabled = read_config(app)
+            .map(|c| c.autostart_enabled)
+            .unwrap_or(true);
+        if enabled {
+            let _ = manager.enable();
+        } else {
+            let _ = manager.disable();
+        }
     }
 }
 
@@ -597,6 +907,9 @@ fn install_tray(app: &mut App) -> tauri::Result<()> {
                 let _ = show_settings(app);
             }
             "check_update" => spawn_manual_update_check(app.clone()),
+            "project_site" => {
+                let _ = app.opener().open_url(PROJECT_URL, None::<&str>);
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -661,11 +974,13 @@ where
     R: Runtime,
     M: Manager<R>,
 {
+    let text = NativeText::current();
     MenuBuilder::new(manager)
-        .text("settings", "设置")
-        .text("check_update", "检查更新")
+        .text("settings", text.settings())
+        .text("check_update", text.check_update())
+        .text("project_site", text.project_site())
         .separator()
-        .text("quit", "退出")
+        .text("quit", text.quit())
         .build()
 }
 
@@ -678,7 +993,11 @@ fn show_main_window(app: &AppHandle) {
     });
 
     if !config_ready {
-        let _ = app.emit_to("settings", "setup-required", "请先完成配置才能显示余额悬浮球");
+        let _ = app.emit_to(
+            "settings",
+            "setup-required",
+            NativeText::current().setup_required(),
+        );
         let _ = show_settings(app);
         return;
     }
@@ -812,7 +1131,9 @@ fn start_fullscreen_monitor(app: AppHandle) {
 #[cfg(windows)]
 fn is_fullscreen_active() -> bool {
     use windows_sys::Win32::{
-        Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST},
+        Graphics::Gdi::{
+            GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+        },
         UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowRect, IsIconic},
     };
 

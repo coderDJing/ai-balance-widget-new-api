@@ -24,6 +24,14 @@ cost accounting, and organization-level access control.
 This widget is designed to work with New API deployments. To use it, you need a
 running New API instance with a valid account.
 
+## Runtime Behavior
+
+- The tray menu includes Settings, Check for updates, Project site, and Quit.
+- Simplified Chinese system locales show Simplified Chinese text. Other locales
+  show English text.
+- Windows release uninstall removes this app's startup registry entries from
+  both `Run` and `StartupApproved\Run`.
+
 ## Credentials
 
 Credentials and provider endpoints are not stored in this repository.

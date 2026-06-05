@@ -18,6 +18,49 @@ const MAIN_WINDOW_MAX_WIDTH = 520;
 const NON_DRAG_SELECTOR =
   "button, input, textarea, select, label, a, [role='button'], [data-window-no-drag]";
 
+type UiLocale = "zh" | "en";
+
+const UI_TEXT = {
+  zh: {
+    accessToken: "Access Token",
+    accessTokenSavedPlaceholder: "已保存，留空不改",
+    autostart: "开机自启动",
+    balanceAriaLabel: "余额",
+    copied: "已复制",
+    copyErrorTitle: "点击复制",
+    endpointUrl: "接口地址",
+    hide: "隐藏",
+    hideSettings: "隐藏设置",
+    loading: "查询中...",
+    refreshInterval: "刷新间隔（秒）",
+    save: "保存",
+    saving: "保存中",
+    settings: "设置",
+    setupRequired: "请先完成配置",
+    unknownError: "未知错误",
+    userId: "User ID",
+  },
+  en: {
+    accessToken: "Access Token",
+    accessTokenSavedPlaceholder: "Saved; leave blank to keep it",
+    autostart: "Launch at startup",
+    balanceAriaLabel: "Balance",
+    copied: "Copied",
+    copyErrorTitle: "Click to copy",
+    endpointUrl: "Base URL",
+    hide: "Hide",
+    hideSettings: "Hide settings",
+    loading: "Loading...",
+    refreshInterval: "Refresh interval (seconds)",
+    save: "Save",
+    saving: "Saving",
+    settings: "Settings",
+    setupRequired: "Finish setup first",
+    unknownError: "Unknown error",
+    userId: "User ID",
+  },
+} as const;
+
 declare global {
   interface Window {
     __TAURI_INTERNALS__?: unknown;
@@ -57,6 +100,32 @@ type FlipTransition = ActiveFlip & {
 
 function isTauriRuntime() {
   return typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
+}
+
+function detectUiLocale(): UiLocale {
+  const languages =
+    typeof navigator === "undefined"
+      ? []
+      : [...(navigator.languages || []), navigator.language].filter(
+          (language): language is string => Boolean(language),
+        );
+
+  return languages.some(isSimplifiedChineseLocale) ? "zh" : "en";
+}
+
+function isSimplifiedChineseLocale(locale: string) {
+  const normalized = locale
+    .split(".")[0]
+    .replace("_", "-")
+    .toLowerCase();
+
+  return (
+    normalized === "zh-cn" ||
+    normalized === "zh-sg" ||
+    normalized === "zh-my" ||
+    normalized === "zh-hans" ||
+    normalized.startsWith("zh-hans-")
+  );
 }
 
 function previewWindowKind(): WindowKind {
@@ -281,6 +350,7 @@ function buildCounterTransitions(
 }
 
 function BalanceWindow() {
+  const text = UI_TEXT[detectUiLocale()];
   const [balanceText, setBalanceText] = useState(formatBalance(null));
   const [displayText, setDisplayText] = useState(formatBalance(null));
   const [activeFlips, setActiveFlips] = useState<Record<number, ActiveFlip>>({});
@@ -412,7 +482,7 @@ function BalanceWindow() {
       if (!loaded.hasAccessToken || !loaded.endpointUrl || !loaded.userId) {
         promptedSetupRef.current = true;
         setQueryStatus("error");
-        setErrorMsg("请先完成配置");
+        setErrorMsg(text.setupRequired);
         await showSettings();
         return;
       }
@@ -426,7 +496,7 @@ function BalanceWindow() {
         if (!snapshot.configured) {
           promptedSetupRef.current = true;
           setQueryStatus("error");
-          setErrorMsg("请先完成配置");
+          setErrorMsg(text.setupRequired);
           await showSettings();
           return;
         }
@@ -439,7 +509,7 @@ function BalanceWindow() {
       } catch (err) {
         if (mounted) {
           setQueryStatus("error");
-          const msg = err instanceof Error ? err.message : String(err || "未知错误");
+          const msg = err instanceof Error ? err.message : String(err || text.unknownError);
           setErrorMsg(msg);
         }
       }
@@ -503,18 +573,18 @@ function BalanceWindow() {
         <button
           className={`icon-button settings-btn${queryStatus !== "ready" ? " always-visible" : ""}`}
           type="button"
-          title="设置"
+          title={text.settings}
           onClick={showSettings}
         >
           <Settings size={14} />
         </button>
         <div className="balance-number">
           {queryStatus === "loading" ? (
-            <div className="loading-indicator">查询中...</div>
+            <div className="loading-indicator">{text.loading}</div>
           ) : (
             <div
               className="flap-machine"
-              aria-label={`余额 ${balanceText}`}
+              aria-label={`${text.balanceAriaLabel} ${balanceText}`}
               style={{ "--flap-scale": flapScale } as CSSProperties}
             >
               {balanceChars.map((char, index) => {
@@ -574,7 +644,7 @@ function BalanceWindow() {
         {queryStatus === "error" && errorMsg && (
           <div
             className="error-line"
-            title="点击复制"
+            title={text.copyErrorTitle}
             onClick={() => {
               navigator.clipboard.writeText(errorMsg).then(() => {
                 setCopied(true);
@@ -582,7 +652,7 @@ function BalanceWindow() {
               }).catch(() => undefined);
             }}
           >
-            {copied ? "✓ 已复制" : errorMsg}
+            {copied ? `✓ ${text.copied}` : errorMsg}
           </div>
         )}
       </div>
@@ -591,6 +661,7 @@ function BalanceWindow() {
 }
 
 function SettingsWindow() {
+  const text = UI_TEXT[detectUiLocale()];
   const [config, setConfig] = useState<ClientConfig>({ hasAccessToken: false, refreshIntervalSecs: 60, autostartEnabled: true });
   const [accessToken, setAccessToken] = useState("");
   const [endpointUrl, setEndpointUrl] = useState("");
@@ -688,12 +759,12 @@ function SettingsWindow() {
         <header className="topbar settings-topbar" data-window-drag-handle onMouseDown={startWindowDrag}>
           <div className="brand">
             <span className="brand-mark" />
-            <span>Settings</span>
+            <span>{text.settings}</span>
           </div>
           <button
             className="icon-button close"
             type="button"
-            title="隐藏设置"
+            title={text.hideSettings}
             onClick={hideWindow}
           >
             <X size={15} />
@@ -703,7 +774,7 @@ function SettingsWindow() {
         <div className="settings-body">
           {setupHint && <div className="setup-hint">{setupHint}</div>}
           <label className="settings-field" htmlFor="endpoint-url">
-            <span>Base URL</span>
+            <span>{text.endpointUrl}</span>
             <input
               id="endpoint-url"
               data-window-no-drag
@@ -717,12 +788,12 @@ function SettingsWindow() {
           </label>
 
           <label className="settings-field" htmlFor="access-token">
-            <span>Access Token</span>
+            <span>{text.accessToken}</span>
             <input
               id="access-token"
               data-window-no-drag
               value={accessToken}
-              placeholder={config.hasAccessToken ? "已保存，留空不改" : "Access Token"}
+              placeholder={config.hasAccessToken ? text.accessTokenSavedPlaceholder : text.accessToken}
               onChange={(event) => {
                 setAccessToken(event.currentTarget.value);
                 setSaveStatus("idle");
@@ -731,7 +802,7 @@ function SettingsWindow() {
           </label>
 
           <label className="settings-field" htmlFor="user-id">
-            <span>User ID</span>
+            <span>{text.userId}</span>
             <input
               id="user-id"
               data-window-no-drag
@@ -745,7 +816,7 @@ function SettingsWindow() {
           </label>
 
           <label className="settings-field" htmlFor="refresh-interval">
-            <span>刷新间隔（秒）</span>
+            <span>{text.refreshInterval}</span>
             <input
               id="refresh-interval"
               type="number"
@@ -762,7 +833,7 @@ function SettingsWindow() {
           </label>
 
           <label className="settings-field settings-field-toggle" htmlFor="autostart">
-            <span>开机自启动</span>
+            <span>{text.autostart}</span>
             <input
               id="autostart"
               type="checkbox"
@@ -779,7 +850,7 @@ function SettingsWindow() {
 
           <div className="settings-actions">
             <button className="secondary-button" type="button" onClick={hideWindow}>
-              <span>隐藏</span>
+              <span>{text.hide}</span>
             </button>
             <button
               className="save-button"
@@ -788,7 +859,7 @@ function SettingsWindow() {
               disabled={saveStatus === "saving"}
             >
               <Save size={14} />
-              <span>{saveStatus === "saving" ? "保存中" : "保存"}</span>
+              <span>{saveStatus === "saving" ? text.saving : text.save}</span>
             </button>
           </div>
 
