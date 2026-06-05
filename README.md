@@ -10,6 +10,10 @@ checking a New API style account balance endpoint. It polls once per minute,
 shows only the numeric remaining balance, and keeps tray commands for showing
 the widget, opening settings, checking updates, and exiting.
 
+<p align="center">
+  <img src="./docs/assets/balance-window.gif" alt="AI Balance Widget balance window demo" width="280">
+</p>
+
 ## About New API
 
 [New API](https://github.com/QuantumNous/new-api) is a next-generation LLM
