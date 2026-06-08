@@ -10,8 +10,8 @@ use std::{
 use tauri::{
     menu::{Menu, MenuBuilder},
     tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
-    App, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, WebviewWindow,
-    WindowEvent,
+    App, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Runtime,
+    WebviewWindow, WindowEvent,
 };
 #[cfg(not(debug_assertions))]
 use tauri_plugin_autostart::ManagerExt;
@@ -20,8 +20,8 @@ use tauri_plugin_updater::UpdaterExt;
 
 const QUOTA_SCALE: f64 = 500_000.0;
 const CONFIG_FILE: &str = "config.json";
-const NOTIFICATION_TITLE: &str = "AI Balance Widget";
-const PROJECT_URL: &str = "https://github.com/coderDJing/ai-balance-widget-new-api";
+const NOTIFICATION_TITLE: &str = "New API Balance Orb";
+const PROJECT_URL: &str = "https://github.com/coderDJing/new-api-balance-orb";
 const MAIN_WINDOW_DEFAULT_WIDTH: f64 = 280.0;
 const MAIN_WINDOW_MIN_WIDTH: f64 = 220.0;
 const MAIN_WINDOW_MAX_WIDTH: f64 = 520.0;
@@ -505,7 +505,7 @@ async fn query_balance(app: AppHandle) -> Result<BalanceSnapshot, String> {
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
-        .user_agent("ai-balance-widget-new-api/0.1")
+        .user_agent("new-api-balance-orb/0.1")
         .build()
         .map_err(|err| text.http_client_failed(err))?;
 
@@ -591,6 +591,14 @@ fn resize_main_window(app: AppHandle, width: f64) -> Result<(), String> {
     position_window_top_right(&window).map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+fn show_balance_context_menu(window: WebviewWindow, x: f64, y: f64) -> Result<(), String> {
+    let menu = build_tray_menu(&window).map_err(|err| err.to_string())?;
+    window
+        .popup_menu_at(&menu, Position::Logical(LogicalPosition::new(x, y)))
+        .map_err(|err| err.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     configure_webview2_shutdown_flags();
@@ -598,7 +606,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_autostart::Builder::new()
-                .app_name("ai-balance-widget-new-api")
+                .app_name("new-api-balance-orb")
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
@@ -619,6 +627,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main_window(app);
         }))
+        .on_menu_event(|app, event| handle_menu_action(app, event.id().as_ref()))
         .setup(|app| {
             install_dev_shutdown_handler(app.handle().clone());
             install_tray(app)?;
@@ -640,7 +649,8 @@ pub fn run() {
             query_balance,
             hide_window,
             show_settings_window,
-            resize_main_window
+            resize_main_window,
+            show_balance_context_menu
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -799,7 +809,7 @@ async fn verify_config(config: &StoredConfig) -> Result<(), String> {
     let text = NativeText::current();
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
-        .user_agent("ai-balance-widget-new-api/0.1")
+        .user_agent("new-api-balance-orb/0.1")
         .build()
         .map_err(|err| text.http_client_failed(err))?;
 
@@ -913,18 +923,7 @@ fn install_tray(app: &mut App) -> tauri::Result<()> {
     let mut tray = TrayIconBuilder::with_id("main")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip("AI Balance Widget for New API")
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            "settings" => {
-                let _ = show_settings(app);
-            }
-            "check_update" => spawn_manual_update_check(app.clone()),
-            "project_site" => {
-                let _ = app.opener().open_url(PROJECT_URL, None::<&str>);
-            }
-            "quit" => app.exit(0),
-            _ => {}
-        })
+        .tooltip("New API Balance Orb")
         .on_tray_icon_event(|tray, event| match event {
             TrayIconEvent::Click {
                 button: MouseButton::Left,
@@ -943,6 +942,20 @@ fn install_tray(app: &mut App) -> tauri::Result<()> {
 
     app.manage(tray.build(handle)?);
     Ok(())
+}
+
+fn handle_menu_action(app: &AppHandle, id: &str) {
+    match id {
+        "settings" => {
+            let _ = show_settings(app);
+        }
+        "check_update" => spawn_manual_update_check(app.clone()),
+        "project_site" => {
+            let _ = app.opener().open_url(PROJECT_URL, None::<&str>);
+        }
+        "quit" => app.exit(0),
+        _ => {}
+    }
 }
 
 fn crop_to_content(icon: tauri::image::Image<'_>) -> tauri::image::Image<'static> {

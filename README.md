@@ -1,17 +1,17 @@
-# AI Balance Widget for New API
+# New API Balance Orb
 
 <p align="center">
   <a href="./README.zh_CN.md">简体中文</a> |
   <strong>English</strong>
 </p>
 
-AI Balance Widget for New API is a frameless Windows Tauri desktop widget for
+New API Balance Orb is a frameless Windows Tauri desktop widget for
 checking a New API style account balance endpoint. It polls once per minute,
 shows only the numeric remaining balance, and keeps tray commands for showing
 the widget, opening settings, checking updates, and exiting.
 
 <p align="center">
-  <img src="./docs/assets/balance-window.gif" alt="AI Balance Widget balance window demo" width="280">
+  <img src="./docs/assets/balance-window.gif" alt="New API Balance Orb balance window demo" width="280">
 </p>
 
 ## About New API
@@ -54,7 +54,7 @@ machine.
 Release builds use Tauri signed updater through GitHub Releases:
 
 ```text
-https://github.com/coderDJing/ai-balance-widget-new-api/releases/latest/download/latest.json
+https://github.com/coderDJing/new-api-balance-orb/releases/latest/download/latest.json
 ```
 
 The updater public key is stored in `src-tauri/tauri.conf.json`. The matching

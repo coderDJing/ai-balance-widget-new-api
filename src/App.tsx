@@ -183,6 +183,10 @@ async function runPreviewCommand<T>(
     return undefined as T;
   }
 
+  if (command === "show_balance_context_menu") {
+    return undefined as T;
+  }
+
   return undefined as T;
 }
 
@@ -378,6 +382,16 @@ function BalanceWindow() {
     await runCommand("show_settings_window").catch(() => undefined);
   }, []);
 
+  const showContextMenu = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    runCommand("show_balance_context_menu", {
+      x: event.clientX,
+      y: event.clientY,
+    }).catch(() => undefined);
+  }, []);
+
   const animateBalance = useCallback(
     (nextText: string) => {
       clearFlipTimers();
@@ -571,7 +585,12 @@ function BalanceWindow() {
   const flapScale = Math.max(0.82, Math.min(1, 13 / Math.max(balanceChars.length, 1)));
 
   return (
-    <main className="shell main-shell" onMouseDown={startWindowDrag} onDoubleClick={showSettings}>
+    <main
+      className="shell main-shell"
+      onContextMenu={showContextMenu}
+      onMouseDown={startWindowDrag}
+      onDoubleClick={showSettings}
+    >
       <div className="orb-window">
         <button
           className={`icon-button settings-btn${queryStatus !== "ready" ? " always-visible" : ""}`}
